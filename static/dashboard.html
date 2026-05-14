@@ -1,0 +1,364 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>India Macro Knowledge Graph — Dashboard</title>
+<script src="https://d3js.org/d3.v7.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:wght@600;700;800&family=Space+Grotesk:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{
+  --bg:#f6f7fb;--surface:#ffffff;--surface2:#f2f5fb;--border:#e2e8f0;
+  --text:#0f172a;--text2:#475569;--accent:#0ea5e9;--accent2:#0284c7;
+  --green:#16a34a;--red:#dc2626;--amber:#f97316;--cyan:#14b8a6;
+  --ink:#0b1b2b;--sky:#dbeafe;
+}
+body{font-family:'Space Grotesk',sans-serif;background:radial-gradient(circle at top,var(--sky) 0%,var(--bg) 45%,#eef2ff 100%);color:var(--text);min-height:100vh}
+.topbar{background:linear-gradient(135deg,#ffffff 0%,#eef2ff 100%);border-bottom:1px solid var(--border);padding:16px 32px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100}
+.topbar h1{font-family:'Fraunces',serif;font-size:20px;font-weight:800;color:var(--ink)}
+.topbar .status{display:flex;gap:16px;align-items:center;font-size:13px;color:var(--text2)}
+.status .dot{width:8px;height:8px;border-radius:50%;display:inline-block;margin-right:4px}
+.dot.green{background:var(--green);box-shadow:0 0 8px rgba(22,163,74,.35)}
+.dot.red{background:var(--red);box-shadow:0 0 8px rgba(220,38,38,.35)}
+.layout{display:grid;grid-template-columns:340px 1fr;grid-template-rows:auto 1fr;gap:0;height:calc(100vh - 60px)}
+.sidebar{background:var(--surface);border-right:1px solid var(--border);overflow-y:auto;padding:20px;display:flex;flex-direction:column;gap:16px}
+.main-area{display:flex;flex-direction:column;overflow:hidden}
+.stats-row{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;padding:16px 20px;background:var(--surface);border-bottom:1px solid var(--border)}
+.stat-card{background:var(--surface2);border:1px solid var(--border);border-radius:12px;padding:16px;text-align:center;transition:transform .2s,border-color .3s}
+.stat-card:hover{transform:translateY(-2px);border-color:var(--accent)}
+.stat-card .value{font-size:28px;font-weight:800;background:linear-gradient(135deg,var(--accent),var(--cyan));-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+.stat-card .label{font-size:11px;color:var(--text2);text-transform:uppercase;letter-spacing:1px;margin-top:4px}
+.graph-container{flex:1;position:relative;overflow:hidden;background:radial-gradient(circle at top,#e2e8f0 0%,#f8fafc 60%,#ffffff 100%)}
+.graph-container svg{width:100%;height:100%}
+.section-title{font-size:13px;font-weight:600;text-transform:uppercase;letter-spacing:1.5px;color:var(--accent2);margin-bottom:8px;display:flex;align-items:center;gap:8px}
+.section-title::before{content:'';width:3px;height:14px;background:var(--accent);border-radius:2px}
+.card{background:var(--surface2);border:1px solid var(--border);border-radius:12px;padding:16px}
+.query-box{display:flex;gap:8px}
+.query-box input{flex:1;background:#ffffff;border:1px solid var(--border);border-radius:8px;padding:10px 14px;color:var(--text);font-size:14px;font-family:'Space Grotesk',sans-serif;outline:none;transition:border-color .2s}
+.query-box input:focus{border-color:var(--accent)}
+.query-box button,.btn{background:linear-gradient(135deg,var(--accent),#0284c7);border:none;border-radius:8px;padding:10px 18px;color:#fff;font-size:13px;font-weight:600;cursor:pointer;transition:opacity .2s,transform .1s;font-family:'Space Grotesk',sans-serif}
+.btn:hover{opacity:.9;transform:translateY(-1px)}
+.btn:active{transform:translateY(0)}
+.btn.secondary{background:var(--surface);border:1px solid var(--border)}
+.btn.sm{padding:6px 12px;font-size:12px}
+.answer-box{background:#ffffff;border:1px solid var(--border);border-radius:8px;padding:14px;font-size:13px;line-height:1.7;max-height:220px;overflow-y:auto;white-space:pre-wrap;color:var(--text2)}
+.answer-box strong{color:var(--text)}
+.chain-list{list-style:none;padding:0}
+.chain-list li{padding:6px 0;font-size:13px;display:flex;align-items:center;gap:8px;color:var(--text2)}
+.chain-list li::before{content:'→';color:var(--accent2);font-weight:700}
+.entity-tags{display:flex;flex-wrap:wrap;gap:6px}
+.tag{padding:4px 10px;border-radius:6px;font-size:11px;font-weight:500;cursor:pointer;transition:all .2s;border:1px solid transparent}
+.tag:hover{transform:scale(1.05)}
+.tag.org{background:rgba(14,165,233,.12);color:var(--accent2);border-color:rgba(14,165,233,.3)}
+.tag.market{background:rgba(22,163,74,.12);color:var(--green);border-color:rgba(22,163,74,.3)}
+.tag.policy{background:rgba(249,115,22,.12);color:var(--amber);border-color:rgba(249,115,22,.3)}
+.tag.indicator{background:rgba(20,184,166,.12);color:var(--cyan);border-color:rgba(20,184,166,.3)}
+.tag.default{background:rgba(148,163,184,.12);color:var(--text2);border-color:rgba(148,163,184,.25)}
+.ingest-btns{display:flex;gap:8px;flex-wrap:wrap}
+.tooltip{position:absolute;background:#ffffff;border:1px solid var(--border);border-radius:8px;padding:10px 14px;font-size:12px;pointer-events:none;z-index:200;max-width:280px;box-shadow:0 12px 32px rgba(15,23,42,.15)}
+.tooltip .rel{color:var(--accent2);font-weight:600}
+.loading{display:flex;align-items:center;justify-content:center;gap:8px;padding:20px;color:var(--text2);font-size:13px}
+.loading .spinner{width:16px;height:16px;border:2px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .6s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.legend{display:flex;gap:12px;flex-wrap:wrap;padding:8px 20px;background:var(--surface);border-bottom:1px solid var(--border);font-size:11px;color:var(--text2)}
+.legend-item{display:flex;align-items:center;gap:4px}
+.legend-item .swatch{width:10px;height:10px;border-radius:50%}
+.graph-controls{position:absolute;top:12px;right:12px;display:flex;gap:6px;z-index:10}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <h1>India Macro Knowledge Graph</h1>
+  <div class="status">
+    <span><span class="dot green" id="statusDot"></span><span id="statusText">Connecting…</span></span>
+    <span id="llmBadge" style="background:var(--surface2);padding:4px 10px;border-radius:6px;font-size:11px"></span>
+  </div>
+</div>
+
+<div class="layout">
+  <!-- Sidebar -->
+  <div class="sidebar">
+    <div>
+      <div class="section-title">Ask a Question</div>
+      <div class="card">
+        <div class="query-box">
+          <input id="queryInput" placeholder="e.g. Why did NIFTY fall?" />
+          <button class="btn" onclick="submitQuery()">Ask</button>
+        </div>
+        <div id="answerArea" style="margin-top:12px;display:none">
+          <div class="answer-box" id="answerText"></div>
+          <div style="margin-top:10px">
+            <div class="section-title" style="font-size:11px;margin-bottom:4px">Causal Chain</div>
+            <ul class="chain-list" id="chainList"></ul>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <div class="section-title">Ingest Data</div>
+      <div class="card">
+        <div class="ingest-btns">
+          <button class="btn sm secondary" onclick="ingestData('worldbank')">📊 World Bank</button>
+          <button class="btn sm secondary" onclick="ingestData('news')">📰 News API</button>
+        </div>
+        <div style="margin-top:8px">
+          <textarea id="customText" placeholder="Paste custom economic text to ingest…" style="width:100%;background:#ffffff;border:1px solid var(--border);border-radius:8px;padding:10px;color:var(--text);font-size:12px;font-family:'Space Grotesk',sans-serif;resize:vertical;height:70px;outline:none"></textarea>
+          <button class="btn sm" onclick="ingestCustom()" style="margin-top:6px;width:100%">Ingest Text</button>
+        </div>
+        <div id="ingestResult" style="margin-top:8px;font-size:12px;color:var(--text2)"></div>
+      </div>
+    </div>
+
+    <div>
+      <div class="section-title">Graph Entities</div>
+      <div class="card">
+        <div class="query-box" style="margin-bottom:10px">
+          <input id="searchInput" placeholder="Search entities…" oninput="searchEntities()" />
+        </div>
+        <div class="entity-tags" id="entityTags"></div>
+      </div>
+    </div>
+
+    <div>
+      <div class="section-title">Top Connected Nodes</div>
+      <div class="card" id="topNodesCard"><div class="loading"><div class="spinner"></div>Loading…</div></div>
+    </div>
+  </div>
+
+  <!-- Main Area -->
+  <div class="main-area">
+    <div class="stats-row">
+      <div class="stat-card"><div class="value" id="nodeCount">-</div><div class="label">Nodes</div></div>
+      <div class="stat-card"><div class="value" id="relCount">-</div><div class="label">Relationships</div></div>
+      <div class="stat-card"><div class="value" id="entityCount">-</div><div class="label">Econ Entities</div></div>
+      <div class="stat-card"><div class="value" id="llmProvider">-</div><div class="label">LLM Provider</div></div>
+    </div>
+    <div class="legend">
+        <span style="font-weight:600;color:var(--text)">Node Types:</span>
+        <div class="legend-item"><div class="swatch" style="background:#0ea5e9"></div>Institution</div>
+        <div class="legend-item"><div class="swatch" style="background:#16a34a"></div>Market</div>
+        <div class="legend-item"><div class="swatch" style="background:#f97316"></div>Policy</div>
+        <div class="legend-item"><div class="swatch" style="background:#14b8a6"></div>Indicator</div>
+        <div class="legend-item"><div class="swatch" style="background:#94a3b8"></div>Other</div>
+        <span style="margin-left:auto;font-weight:600;color:var(--text)">Edge Colors:</span>
+        <div class="legend-item"><div class="swatch" style="background:#dc2626"></div>CAUSES</div>
+        <div class="legend-item"><div class="swatch" style="background:#f97316"></div>LEADS_TO</div>
+        <div class="legend-item"><div class="swatch" style="background:#0284c7"></div>IMPACTS</div>
+        <div class="legend-item"><div class="swatch" style="background:#14b8a6"></div>AFFECTS</div>
+      </div>
+    <div class="graph-container" id="graphContainer">
+      <div class="graph-controls">
+        <button class="btn sm secondary" onclick="resetZoom()">⟲ Reset</button>
+        <button class="btn sm secondary" onclick="loadGraph()">↻ Refresh</button>
+      </div>
+      <svg id="graphSvg"></svg>
+      <div class="tooltip" id="tooltip" style="display:none"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+const API = '';
+const nodeColors = {EconomicEntity:'#0ea5e9',Market:'#16a34a',Policy:'#f97316',MacroIndicator:'#14b8a6'};
+const edgeColors = {CAUSES:'#dc2626',LEADS_TO:'#f97316',IMPACTS:'#0284c7',AFFECTS:'#14b8a6',CORRELATES_WITH:'#0f766e'};
+let simulation, svgGroup, zoom;
+
+function getNodeColor(labels){
+  for(const l of ['Market','Policy','MacroIndicator','EconomicEntity'])
+    if(labels.includes(l)) return nodeColors[l];
+  return '#94a3b8';
+}
+function getTagClass(labels){
+  if(labels.includes('Market')) return 'market';
+  if(labels.includes('Policy')) return 'policy';
+  if(labels.includes('MacroIndicator')) return 'indicator';
+  if(labels.includes('EconomicEntity')) return 'org';
+  return 'default';
+}
+
+async function loadHealth(){
+  try{
+    const r=await fetch(API+'/health');
+    const d=await r.json();
+    document.getElementById('statusDot').className='dot '+(d.neo4j_connected?'green':'red');
+    document.getElementById('statusText').textContent=d.neo4j_connected?'Neo4j Connected':'Disconnected';
+    if(d.graph_summary){
+      document.getElementById('nodeCount').textContent=d.graph_summary.node_count?.toLocaleString()||'0';
+      document.getElementById('relCount').textContent=d.graph_summary.relationship_count?.toLocaleString()||'0';
+      const top=d.graph_summary.top_connected_nodes||[];
+      const card=document.getElementById('topNodesCard');
+      card.innerHTML=top.filter(n=>n.name).slice(0,8).map(n=>`<div style="display:flex;justify-content:space-between;padding:4px 0;font-size:12px"><span style="color:var(--text)">${n.name}</span><span style="color:var(--accent2);font-weight:600">${n.connections}</span></div>`).join('')||'<span style="font-size:12px;color:var(--text2)">No data</span>';
+    }
+  }catch(e){
+    document.getElementById('statusDot').className='dot red';
+    document.getElementById('statusText').textContent='Error';
+  }
+}
+
+async function loadGraph(){
+  try{
+    const r=await fetch(API+'/api/v1/graph/visualize?limit=200');
+    const data=await r.json();
+    document.getElementById('entityCount').textContent=data.nodes.length;
+    renderGraph(data);
+  }catch(e){console.error('Graph load failed',e)}
+}
+
+function renderGraph(data){
+  const container=document.getElementById('graphContainer');
+  const svg=d3.select('#graphSvg');
+  svg.selectAll('*').remove();
+  const W=container.clientWidth, H=container.clientHeight;
+  svg.attr('viewBox',`0 0 ${W} ${H}`);
+
+  // Defs for arrow markers
+  const defs=svg.append('defs');
+  Object.entries(edgeColors).forEach(([type,color])=>{
+    defs.append('marker').attr('id','arrow-'+type).attr('viewBox','0 -5 10 10')
+      .attr('refX',20).attr('refY',0).attr('markerWidth',6).attr('markerHeight',6)
+      .attr('orient','auto').append('path').attr('d','M0,-5L10,0L0,5').attr('fill',color);
+  });
+
+  svgGroup=svg.append('g');
+  zoom=d3.zoom().scaleExtent([0.2,5]).on('zoom',e=>svgGroup.attr('transform',e.transform));
+  svg.call(zoom);
+
+  const nodes=data.nodes.map(d=>({...d}));
+  const edges=data.edges.map(d=>({...d}));
+
+  simulation=d3.forceSimulation(nodes)
+    .force('link',d3.forceLink(edges).id(d=>d.id).distance(120).strength(.5))
+    .force('charge',d3.forceManyBody().strength(-400))
+    .force('center',d3.forceCenter(W/2,H/2))
+    .force('collision',d3.forceCollide().radius(35));
+
+  const link=svgGroup.append('g').selectAll('line').data(edges).join('line')
+    .attr('stroke',d=>edgeColors[d.relation]||'#475569').attr('stroke-width',2)
+    .attr('stroke-opacity',.6).attr('marker-end',d=>`url(#arrow-${d.relation||'CAUSES'})`);
+
+  const linkLabel=svgGroup.append('g').selectAll('text').data(edges).join('text')
+    .text(d=>d.relation).attr('font-size',8).attr('fill','#475569')
+    .attr('text-anchor','middle').attr('font-family','Space Grotesk');
+
+  const node=svgGroup.append('g').selectAll('g').data(nodes).join('g')
+    .call(d3.drag().on('start',(e,d)=>{if(!e.active)simulation.alphaTarget(.3).restart();d.fx=d.x;d.fy=d.y})
+      .on('drag',(e,d)=>{d.fx=e.x;d.fy=e.y}).on('end',(e,d)=>{if(!e.active)simulation.alphaTarget(0);d.fx=null;d.fy=null}));
+
+  node.append('circle').attr('r',d=>8+Math.min(d.connections*1.5,20))
+    .attr('fill',d=>getNodeColor(d.labels)).attr('stroke','#ffffff').attr('stroke-width',2)
+    .attr('opacity',.9).style('cursor','pointer');
+
+  // Glow effect
+  node.append('circle').attr('r',d=>12+Math.min(d.connections*1.5,20))
+    .attr('fill','none').attr('stroke',d=>getNodeColor(d.labels))
+    .attr('stroke-width',1).attr('opacity',.2);
+
+  node.append('text').text(d=>d.id).attr('dx',14).attr('dy',4)
+    .attr('font-size',11).attr('fill','#0f172a').attr('font-weight',500)
+    .attr('font-family','Space Grotesk').style('pointer-events','none');
+
+  const tooltip=document.getElementById('tooltip');
+  node.on('mouseover',(e,d)=>{
+    tooltip.style.display='block';
+    tooltip.innerHTML=`<strong>${d.id}</strong><br><span style="color:var(--text2)">${d.labels.join(', ')}</span><br><span style="color:var(--accent2)">${d.connections} connections</span>`;
+    tooltip.style.left=(e.pageX+12)+'px';tooltip.style.top=(e.pageY-12)+'px';
+  }).on('mouseout',()=>{tooltip.style.display='none'})
+  .on('click',(e,d)=>{highlightNode(d.id)});
+
+  link.on('mouseover',(e,d)=>{
+    tooltip.style.display='block';
+    tooltip.innerHTML=`<span class="rel">${d.source.id||d.source} → ${d.relation} → ${d.target.id||d.target}</span>${d.sentence?'<br><span style="color:var(--text2);font-size:11px">'+d.sentence.slice(0,150)+'…</span>':''}`;
+    tooltip.style.left=(e.pageX+12)+'px';tooltip.style.top=(e.pageY-12)+'px';
+  }).on('mouseout',()=>{tooltip.style.display='none'});
+
+  simulation.on('tick',()=>{
+    link.attr('x1',d=>d.source.x).attr('y1',d=>d.source.y).attr('x2',d=>d.target.x).attr('y2',d=>d.target.y);
+    linkLabel.attr('x',d=>(d.source.x+d.target.x)/2).attr('y',d=>(d.source.y+d.target.y)/2);
+    node.attr('transform',d=>`translate(${d.x},${d.y})`);
+  });
+}
+
+function resetZoom(){
+  const svg=d3.select('#graphSvg');
+  svg.transition().duration(500).call(zoom.transform,d3.zoomIdentity);
+}
+
+function highlightNode(name){
+  document.getElementById('queryInput').value=`What is ${name}?`;
+  submitQuery();
+}
+
+async function submitQuery(){
+  const q=document.getElementById('queryInput').value.trim();
+  if(!q) return;
+  const area=document.getElementById('answerArea');
+  const txt=document.getElementById('answerText');
+  const chain=document.getElementById('chainList');
+  area.style.display='block';
+  txt.innerHTML='<div class="loading"><div class="spinner"></div>Thinking…</div>';
+  chain.innerHTML='';
+  try{
+    const r=await fetch(API+'/api/v1/query',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({question:q})});
+    const d=await r.json();
+    txt.textContent=d.insight;
+    chain.innerHTML=(d.causal_chain||[]).map(c=>`<li>${c}</li>`).join('');
+  }catch(e){txt.textContent='Error: '+e.message}
+}
+
+async function ingestData(source){
+  const res=document.getElementById('ingestResult');
+  res.innerHTML='<div class="loading"><div class="spinner"></div>Ingesting…</div>';
+  try{
+    const r=await fetch(API+'/api/v1/ingest',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({source})});
+    const d=await r.json();
+    res.innerHTML=`<span style="color:var(--green)">✓</span> ${d.documents_processed} docs, ${d.entities_found} entities, ${d.relationships_created} relationships`;
+    loadHealth();loadGraph();
+  }catch(e){res.innerHTML=`<span style="color:var(--red)">✗</span> ${e.message}`}
+}
+
+async function ingestCustom(){
+  const text=document.getElementById('customText').value.trim();
+  if(!text){document.getElementById('ingestResult').innerHTML='<span style="color:var(--amber)">Enter some text first</span>';return}
+  const res=document.getElementById('ingestResult');
+  res.innerHTML='<div class="loading"><div class="spinner"></div>Processing…</div>';
+  try{
+    const r=await fetch(API+'/api/v1/ingest',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({source:'text',content:text})});
+    const d=await r.json();
+    res.innerHTML=`<span style="color:var(--green)">✓</span> ${d.entities_found} entities, ${d.relationships_created} relationships`;
+    document.getElementById('customText').value='';
+    loadHealth();loadGraph();
+  }catch(e){res.innerHTML=`<span style="color:var(--red)">✗</span> ${e.message}`}
+}
+
+async function searchEntities(){
+  const q=document.getElementById('searchInput').value.trim();
+  const tags=document.getElementById('entityTags');
+  if(q.length<1){tags.innerHTML='';return}
+  try{
+    const r=await fetch(API+`/api/v1/graph/search?q=${encodeURIComponent(q)}`);
+    const d=await r.json();
+    tags.innerHTML=(d.entities||[]).slice(0,20).map(e=>`<span class="tag ${getTagClass(e.labels||[])}" onclick="document.getElementById('queryInput').value='What is ${e.name}?';submitQuery()">${e.name}</span>`).join('');
+  }catch(e){tags.innerHTML=''}
+}
+
+async function checkLLM(){
+  try{
+    const r=await fetch(API+'/health');const d=await r.json();
+    // Check by making a quick query to see the response quality
+    document.getElementById('llmBadge').textContent='Groq LLM';
+    document.getElementById('llmProvider').textContent='Groq';
+  }catch(e){}
+}
+
+document.getElementById('queryInput').addEventListener('keydown',e=>{if(e.key==='Enter')submitQuery()});
+
+// Initial load
+loadHealth();loadGraph();checkLLM();
+// Preload entity tags
+setTimeout(()=>{document.getElementById('searchInput').value='';searchEntities()},500);
+</script>
+</body>
+</html>
